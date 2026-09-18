@@ -21,6 +21,7 @@ if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#081225">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <meta name="description" content="KANG SEUNG HYUN — Creative Portfolio">
 <title>KANG SEUNG HYUN — Creative Portfolio</title>
 
@@ -5832,7 +5833,7 @@ function openDB(){
 
   return new Promise(
     (resolve,reject)=>{
-
+   
       if(!window.indexedDB){
         reject(new Error("INDEXEDDB_UNAVAILABLE"));
         return;
@@ -6835,7 +6836,158 @@ async function renderWorks(){
 /* =========================================================
    INITIALIZE
 ========================================================= */
+/* =========================================================
+   SUPABASE STORAGE + DATABASE
+========================================================= */
 
+const SUPABASE_URL = "https://dcreziagugyxjxxyhruz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MArDDkdDRxNsQ4wMUrTOYw_NqSShsB8";
+
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+const safeFileName = (name) =>
+  String(name || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
+
+openDB = async function(){
+  db = supabaseClient;
+  return db;
+};
+
+addWork = async function(work){
+  let imagePath = null;
+  let audioPath = null;
+
+  try{
+    const storage = supabaseClient.storage.from("portfolio");
+
+    if(work.imageBlob){
+      imagePath = `works/${work.id}/image-${safeFileName(work.imageBlob.name || "image")}`;
+
+      const {error} = await storage.upload(
+        imagePath,
+        work.imageBlob,
+        {
+          upsert: true,
+          contentType: work.imageBlob.type || "application/octet-stream"
+        }
+      );
+
+      if(error) throw error;
+    }
+
+    if(work.audioBlob){
+      audioPath = `works/${work.id}/audio-${safeFileName(work.audioBlob.name || work.audioName || "audio")}`;
+
+      const {error} = await storage.upload(
+        audioPath,
+        work.audioBlob,
+        {
+          upsert: true,
+          contentType: work.audioBlob.type || work.audioType || "application/octet-stream"
+        }
+      );
+
+      if(error) throw error;
+    }
+
+    const imageUrl = imagePath
+      ? storage.getPublicUrl(imagePath).data.publicUrl
+      : null;
+
+    const audioUrl = audioPath
+      ? storage.getPublicUrl(audioPath).data.publicUrl
+      : null;
+
+    const {error} = await supabaseClient
+      .from("works")
+      .insert({
+        id: work.id,
+        title: work.title || "",
+        category: work.category || "",
+        year: work.year || "",
+        description: work.description || "",
+        process: work.process || "",
+        image_url: imageUrl,
+        audio_url: audioUrl,
+        image_path: imagePath,
+        audio_path: audioPath,
+        audio_name: work.audioName || "",
+        audio_type: work.audioType || "",
+        created_at: new Date(work.createdAt || Date.now()).toISOString()
+      });
+
+    if(error) throw error;
+
+    return work;
+  }catch(error){
+    if(imagePath){
+      await storage.remove([imagePath]).catch(()=>{});
+    }
+
+    if(audioPath){
+      await storage.remove([audioPath]).catch(()=>{});
+    }
+
+    throw error;
+  }
+};
+
+getWorks = async function(){
+  const {data, error} = await supabaseClient
+    .from("works")
+    .select("*")
+    .order("created_at", {ascending:false});
+
+  if(error) throw error;
+
+  return (data || []).map(row => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    year: row.year,
+    description: row.description,
+    process: row.process,
+    imageBlob: row.image_url || null,
+    audioBlob: row.audio_url || null,
+    audioName: row.audio_name || "",
+    audioType: row.audio_type || "",
+    createdAt: Date.parse(row.created_at) || Date.now()
+  }));
+};
+
+deleteWork = async function(id){
+  const {data, error} = await supabaseClient
+    .from("works")
+    .select("image_path, audio_path")
+    .eq("id", id)
+    .maybeSingle();
+
+  if(error) throw error;
+
+  const paths = [];
+
+  if(data?.image_path) paths.push(data.image_path);
+  if(data?.audio_path) paths.push(data.audio_path);
+
+  if(paths.length){
+    const {error: storageError} =
+      await supabaseClient.storage
+        .from("portfolio")
+        .remove(paths);
+
+    if(storageError) throw storageError;
+  }
+
+  const {error: deleteError} = await supabaseClient
+    .from("works")
+    .delete()
+    .eq("id", id);
+
+  if(deleteError) throw deleteError;
+};
 (async()=>{
 
   try{
