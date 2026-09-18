@@ -6859,10 +6859,9 @@ openDB = async function(){
 addWork = async function(work){
   let imagePath = null;
   let audioPath = null;
+  const storage = supabaseClient.storage.from("portfolio");
 
-  try{
-    const storage = supabaseClient.storage.from("portfolio");
-
+try{
     if(work.imageBlob){
       imagePath = `works/${work.id}/image-${safeFileName(work.imageBlob.name || "image")}`;
 
