@@ -6915,7 +6915,7 @@ try{
         audio_path: audioPath,
         audio_name: work.audioName || "",
         audio_type: work.audioType || "",
-        created_at: new Date(work.createdAt || Date.now()).toISOString()
+        created_at: work.createdAt || Date.now()
       });
 
     if(error) throw error;
