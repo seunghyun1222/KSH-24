@@ -6719,7 +6719,11 @@ addWork = async function(work){
   if(!isAdmin) return null;
   
   const { data: { session } } = await supabaseClient.auth.getSession();
-  alert(session ? "세션 있음" : "세션 없음");
+  alert(
+  session
+    ? "세션 있음\nUID: " + session.user.id + "\n이메일: " + session.user.email
+    : "세션 없음"
+);
   
   let imagePath = null;
   let audioPath = null;
