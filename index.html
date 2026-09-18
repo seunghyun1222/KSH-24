@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+no<!DOCTYPE html>
 <script>
 if ("scrollRestoration" in history) {
   history.scrollRestoration = "manual";
@@ -6673,7 +6673,39 @@ const supabaseClient = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY
 );
+async function requireAdminLogin(){
+  const { data: { session } } =
+    await supabaseClient.auth.getSession();
 
+  if(session?.user?.email === "kst111213@naver.com"){
+    return true;
+  }
+
+  const email = prompt("관리자 이메일을 입력하세요.");
+  if(!email) return false;
+
+  const password = prompt("관리자 비밀번호를 입력하세요.");
+  if(!password) return false;
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+  if(error){
+    alert("로그인 실패: " + error.message);
+    return false;
+  }
+
+  if(data.user?.email !== "kst111213@naver.com"){
+    await supabaseClient.auth.signOut();
+    alert("관리자 계정만 사용할 수 있습니다.");
+    return false;
+  }
+
+  return true;
+}
 const safeFileName = (name) =>
   String(name || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -6683,6 +6715,9 @@ openDB = async function(){
 };
 
 addWork = async function(work){
+  const isAdmin = await requireAdminLogin();
+  if(!isAdmin) return null;
+  
   let imagePath = null;
   let audioPath = null;
   const storage = supabaseClient.storage.from("portfolio");
