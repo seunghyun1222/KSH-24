@@ -1,20 +1,12 @@
-<!DOCTYPE html>
 <script>
-if ("scrollRestoration" in history) {
-  history.scrollRestoration = "manual";
-}
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
-window.addEventListener("load", function () {
+window.addEventListener("load", () => {
   window.scrollTo(0, 0);
+  if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
+    setTimeout(() => window.scrollTo(0, 0), 100);
+  }
 });
-
-if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
-  window.scrollTo(0, 0);
-
-  setTimeout(function () {
-    window.scrollTo(0, 0);
-  }, 100);
-}
 </script>
 <html lang="ko">
 <head>
@@ -28,7 +20,7 @@ if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
 
@@ -39,9 +31,6 @@ if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
 :root{
   --cream:#EEE9DF;
   --cream-2:#E6DFD2;
-  --beige:#D8D0C0;
-
-  --blue:#203864;
   --navy:#12244A;
   --deep:#081225;
 
@@ -57,7 +46,6 @@ if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
   --line-dark:rgba(255,255,255,.12);
 
   --ease:cubic-bezier(.16,1,.3,1);
-  --ease-soft:cubic-bezier(.22,1,.36,1);
 }
 
 /* =========================================================
@@ -2247,6 +2235,10 @@ section{
   display:flex;
   gap:6px;
   pointer-events:none;
+
+  /* 가로 카드가 움직여도 <>는 화면 기준 위치를 유지 */
+  transform:translate3d(var(--horizontal-scroll-offset,0px),0,0);
+  will-change:transform;
 }
 
 .horizontal-control{
@@ -4851,10 +4843,6 @@ if(connectSection){
 }
 window.addEventListener('scroll',updateCursorThread,{passive:true});
 
-/* =========================================================
-   BASIC
-========================================================= */
-
 updateOpening();
 
 /* =========================================================
@@ -5206,6 +5194,18 @@ document
 ========================================================= */
 
 function updateHorizontalControls(wrapper){
+
+  /*
+    controls는 scroll container 안에 있기 때문에
+    기본적으로 카드와 함께 좌우로 이동한다.
+    scrollLeft만큼 반대로 보정해서 <> 버튼은
+    02 / WHAT I MAKE, 06 / SELECTED WORKS의
+    화면상 위치에 고정되도록 한다.
+  */
+  wrapper.style.setProperty(
+    "--horizontal-scroll-offset",
+    `${wrapper.scrollLeft}px`
+  );
 
   const controls =
     wrapper.querySelectorAll(".horizontal-control");
@@ -5641,238 +5641,6 @@ function showToast(message){
 }
 
 /* =========================================================
-   INDEXED DB
-   Blob 기반으로 저장
-========================================================= */
-
-const DB_NAME =
-  "KSH_PORTFOLIO_DB";
-
-const DB_VERSION = 2;
-
-const STORE =
-  "works";
-
-let db = null;
-
-function openDB(){
-
-  return new Promise(
-    (resolve,reject)=>{
-   
-      if(!window.indexedDB){
-        reject(new Error("INDEXEDDB_UNAVAILABLE"));
-        return;
-      }
-
-      const request =
-        indexedDB.open(
-          DB_NAME,
-          DB_VERSION
-        );
-
-      request.onupgradeneeded =
-        ()=>{
-          
-          const database =
-            request.result;
-
-          if(
-            !database
-              .objectStoreNames
-              .contains(STORE)
-          ){
-
-            database.createObjectStore(
-              STORE,
-              {
-                keyPath:"id"
-              }
-            );
-
-          }
-
-        };
-
-      request.onsuccess =
-        ()=>{
-
-          db =
-            request.result;
-
-          db.onerror =
-            e=>{
-              console.error(
-                "IndexedDB error:",
-                e
-              );
-            };
-
-          db.onversionchange = ()=>db.close();
-
-          resolve(db);
-
-        };
-
-      request.onerror =
-        ()=>{
-
-          reject(
-            request.error
-          );
-
-        };
-
-    }
-  );
-
-}
-
-function addWork(work){
-
-  return new Promise(
-    (resolve,reject)=>{
-
-      if(!db){
-        reject(new Error("DATABASE_NOT_READY"));
-        return;
-      }
-
-      try{
-
-        const tx =
-          db.transaction(
-            STORE,
-            "readwrite"
-          );
-
-        tx
-          .objectStore(STORE)
-          .put(work);
-
-        tx.oncomplete =
-          resolve;
-
-        tx.onerror =
-          ()=>{
-            reject(
-              tx.error
-            );
-          };
-
-        tx.onabort =
-          ()=>{
-            reject(
-              tx.error ||
-              new Error(
-                "Transaction aborted"
-              )
-            );
-          };
-
-      }catch(error){
-
-        reject(error);
-
-      }
-
-    }
-  );
-
-}
-
-function getWorks(){
-
-  return new Promise(
-    (resolve,reject)=>{
-
-      if(!db){
-        reject(new Error("DATABASE_NOT_READY"));
-        return;
-      }
-
-      try{
-
-        const tx =
-          db.transaction(
-            STORE,
-            "readonly"
-          );
-
-        const request =
-          tx
-            .objectStore(STORE)
-            .getAll();
-
-        request.onsuccess =
-          ()=>{
-            resolve(
-              request.result || []
-            );
-          };
-
-        request.onerror =
-          ()=>{
-            reject(
-              request.error
-            );
-          };
-
-      }catch(error){
-
-        reject(error);
-
-      }
-
-    }
-  );
-
-}
-
-function deleteWork(id){
-
-  return new Promise(
-    (resolve,reject)=>{
-
-      if(!db){
-        reject(new Error("DATABASE_NOT_READY"));
-        return;
-      }
-
-      try{
-
-        const tx =
-          db.transaction(
-            STORE,
-            "readwrite"
-          );
-
-        tx
-          .objectStore(STORE)
-          .delete(id);
-
-        tx.oncomplete =
-          resolve;
-
-        tx.onerror =
-          ()=>{
-            reject(
-              tx.error
-            );
-          };
-
-      }catch(error){
-
-        reject(error);
-
-      }
-
-    }
-  );
-
-}
-
-/* =========================================================
    ESCAPE
 ========================================================= */
 
@@ -6024,10 +5792,6 @@ workForm.addEventListener(
       "SAVING...";
 
     try{
-
-      if(!db){
-        await openDB();
-      }
 
       const title =
         document
@@ -6220,18 +5984,6 @@ workForm.addEventListener(
 
         showToast(
           "MP3, WAV, M4A, AAC, OGG, FLAC 음원을 선택해주세요."
-        );
-
-      }else if(error.message === "INDEXEDDB_UNAVAILABLE"){
-
-        showToast(
-          "이 브라우저에서는 작품 저장 기능을 사용할 수 없습니다."
-        );
-
-      }else if(error.message === "DATABASE_NOT_READY"){
-
-        showToast(
-          "저장 공간을 준비하는 중입니다. 잠시 후 다시 시도해주세요."
         );
 
       }else{
@@ -6655,6 +6407,19 @@ async function renderWorks(){
 
   bindCursorTargets();
 
+  /*
+    WORKS 카드는 비동기로 렌더링되므로
+    카드가 추가된 직후 좌우 컨트롤 상태를 다시 계산한다.
+  */
+  const worksWrap =
+    track.closest(".works-track-wrap");
+
+  if(worksWrap){
+    requestAnimationFrame(()=>{
+      updateHorizontalControls(worksWrap);
+    });
+  }
+
   updateWorksCount();
 
 }
@@ -6708,11 +6473,6 @@ async function requireAdminLogin(){
 }
 const safeFileName = (name) =>
   String(name || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
-
-openDB = async function(){
-  db = supabaseClient;
-  return db;
-};
 
 addWork = async function(work){
   const isAdmin = await requireAdminLogin();
@@ -6862,8 +6622,6 @@ deleteWork = async function(id){
 (async()=>{
 
   try{
-
-    await openDB();
 
     await renderWorks();
 
